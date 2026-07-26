@@ -11,6 +11,9 @@ Item {
     property real spacing: 8
     property color backgroundColor: "transparent"
     property bool showAddDialog: false
+    property bool showViewDialog: false
+    property var viewingEvent: null
+    property var viewingDayDate: null
     property int dialogMargins: 20
     property int fabSize: 48
     property int fabMargins: 14
@@ -462,6 +465,7 @@ Item {
                             clip: true
                             property bool isToday: index === root.currentDayIndex
                             property var timedEvents: root.getTimedEvents(modelData.events)
+                            property var dayModel: modelData
 
                             Rectangle {
                                 anchors.fill: parent
@@ -502,6 +506,13 @@ Item {
 
                                     HoverHandler {
                                         id: eventHover
+                                    }
+                                    TapHandler {
+                                        onTapped: {
+                                            root.viewingEvent = modelData
+                                            root.viewingDayDate = parent.parent.dayModel.date
+                                            root.showViewDialog = true
+                                        }
                                     }
 
                                     ToolTip {
@@ -602,7 +613,10 @@ Item {
         anchors.bottom: parent.bottom
         anchors.rightMargin: root.fabMargins
         anchors.bottomMargin: root.fabMargins
-        onClicked: root.showAddDialog = true
+        onClicked: {
+            addEventDialog.editingEventId = ""
+            root.showAddDialog = true
+        }
         iconText: "add"
     }
 
@@ -621,11 +635,7 @@ Item {
 
         onVisibleChanged: {
             if (!visible) {
-                eventTitleInput.text = ""
-                eventDescInput.text = ""
-                customColorInput.text = ""
-                addEventDialog.customMode = false
-                addEventDialog.selectedColor = addEventDialog.colorOptions[0].hex
+                addEventDialog.resetFields()
                 addEventFab.focus = true
             }
         }
@@ -657,6 +667,7 @@ Item {
             }
 
             property string errorText: ""
+            property string editingEventId: ""
             property var colorOptions: [
                 { "name": Translation.tr("Blue"), "hex": "#039be5" },
                 { "name": Translation.tr("Green"), "hex": "#33b679" },
@@ -679,6 +690,48 @@ Item {
                 return isNaN(d.getTime()) ? null : d;
             }
 
+            function resetFields() {
+                eventTitleInput.text = ""
+                eventDescInput.text = ""
+                customColorInput.text = ""
+                addEventDialog.customMode = false
+                addEventDialog.selectedColor = addEventDialog.colorOptions[0].hex
+                addEventDialog.editingEventId = ""
+                addEventDialog.errorText = ""
+            }
+
+            function openForEdit(ev, dayDate) {
+                addEventDialog.errorText = ""
+                addEventDialog.editingEventId = ev.id || ""
+
+                eventTitleInput.text = ev.title || ""
+                eventDescInput.text = ev.description || ""
+
+                let sp = (ev.start || "00:00").split(":");
+                let ep = (ev.end || "00:00").split(":");
+                let startDate = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), parseInt(sp[0]), parseInt(sp[1]));
+                let endDate = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), parseInt(ep[0]), parseInt(ep[1]));
+
+                startDateInput.text = Qt.formatDate(startDate, "yyyy-MM-dd")
+                startTimeInput.text = Qt.formatTime(startDate, "hh:mm")
+                endDateInput.text = Qt.formatDate(endDate, "yyyy-MM-dd")
+                endTimeInput.text = Qt.formatTime(endDate, "hh:mm")
+
+                if (ev.color && addEventDialog.isPreset(ev.color)) {
+                    addEventDialog.customMode = false
+                    addEventDialog.selectedColor = ev.color
+                } else if (ev.color) {
+                    addEventDialog.customMode = true
+                    customColorInput.text = ev.color
+                    addEventDialog.selectedColor = ev.color
+                } else {
+                    addEventDialog.customMode = false
+                    addEventDialog.selectedColor = addEventDialog.colorOptions[0].hex
+                }
+
+                root.showAddDialog = true
+            }
+
             function addEvent() {
                 addEventDialog.errorText = "";
                 if (eventTitleInput.text.length === 0) return;
@@ -694,12 +747,20 @@ Item {
                     return;
                 }
 
-                CalendarService.addLocalEvent(eventTitleInput.text, eventDescInput.text, start, end, addEventDialog.selectedColor);
-                eventTitleInput.text = ""
-                eventDescInput.text = ""
-                customColorInput.text = ""
-                addEventDialog.customMode = false
-                addEventDialog.selectedColor = addEventDialog.colorOptions[0].hex
+                if (addEventDialog.editingEventId) {
+                    CalendarService.updateLocalEvent(addEventDialog.editingEventId, eventTitleInput.text, eventDescInput.text, start, end, addEventDialog.selectedColor);
+                } else {
+                    CalendarService.addLocalEvent(eventTitleInput.text, eventDescInput.text, start, end, addEventDialog.selectedColor);
+                }
+                addEventDialog.resetFields();
+                root.showAddDialog = false
+            }
+
+            function deleteEvent() {
+                if (addEventDialog.editingEventId) {
+                    CalendarService.deleteLocalEvent(addEventDialog.editingEventId);
+                }
+                addEventDialog.resetFields();
                 root.showAddDialog = false
             }
 
@@ -715,7 +776,7 @@ Item {
                     Layout.alignment: Qt.AlignLeft
                     color: Appearance.m3colors.m3onSurface
                     font.pixelSize: Appearance.font.pixelSize.larger
-                    text: Translation.tr("Add event")
+                    text: addEventDialog.editingEventId ? Translation.tr("Edit event") : Translation.tr("Add event")
                 }
 
                 TextField {
@@ -1039,18 +1100,170 @@ Item {
                     Layout.bottomMargin: 16
                     Layout.leftMargin: 16
                     Layout.rightMargin: 16
-                    Layout.alignment: Qt.AlignRight
+                    Layout.fillWidth: true
                     spacing: 5
 
                     DialogButton {
+                        buttonText: Translation.tr("Delete")
+                        visible: addEventDialog.editingEventId.length > 0
+                        onClicked: addEventDialog.deleteEvent()
+                    }
+                    Item { Layout.fillWidth: true }
+                    DialogButton {
                         buttonText: Translation.tr("Cancel")
-                        onClicked: root.showAddDialog = false
+                        onClicked: {
+                            addEventDialog.resetFields()
+                            root.showAddDialog = false
+                        }
                     }
                     DialogButton {
-                        buttonText: Translation.tr("Add")
+                        buttonText: addEventDialog.editingEventId ? Translation.tr("Save") : Translation.tr("Add")
                         enabled: eventTitleInput.text.length > 0
                         onClicked: addEventDialog.addEvent()
                     }
+                }
+            }
+        }
+    }
+
+    Item {
+        id: viewDialogOverlay
+        anchors.fill: parent
+        z: 9998
+        visible: opacity > 0
+        opacity: root.showViewDialog ? 1 : 0
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Appearance.animation.elementMoveFast.duration
+                easing.type: Appearance.animation.elementMoveFast.type
+                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+            }
+        }
+
+        Rectangle { // Scrim
+            anchors.fill: parent
+            radius: Appearance.rounding.small
+            color: Appearance.colors.colScrim
+            MouseArea {
+                hoverEnabled: true
+                anchors.fill: parent
+                preventStealing: true
+                propagateComposedEvents: false
+                onClicked: root.showViewDialog = false
+            }
+        }
+
+        Rectangle {
+            id: viewDialog
+            anchors.centerIn: parent
+            width: Math.min(360, parent.width - root.dialogMargins * 2)
+            implicitHeight: Math.max(viewDialogColumn.implicitHeight, 180)
+            radius: Appearance.rounding.normal
+            color: root.viewingEvent ? (root.viewingEvent.color || Appearance.colors.colTertiaryContainer) : Appearance.colors.colTertiaryContainer
+
+            readonly property color textColor: ColorUtils.getContrastingTextColor(color)
+
+            function formattedRange() {
+                if (!root.viewingEvent) return "";
+                if (root.isAllDayEvent(root.viewingEvent)) return Translation.tr("All day");
+
+                let sp = (root.viewingEvent.start || "00:00").split(":");
+                let ep = (root.viewingEvent.end || "00:00").split(":");
+                let fmt = (h, m) => {
+                    let d = new Date();
+                    d.setHours(parseInt(h), parseInt(m), 0);
+                    return Qt.formatTime(d, Config.options?.time.format ?? "hh:mm");
+                };
+                return fmt(sp[0], sp[1]) + " - " + fmt(ep[0], ep[1]);
+            }
+
+            MouseArea { // Absorb clicks so they don't fall through to the scrim
+                anchors.fill: parent
+                preventStealing: true
+            }
+
+            RippleButton {
+                id: deleteButton
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.margins: 14
+                implicitWidth: 36
+                implicitHeight: 36
+                buttonRadius: Appearance.rounding.full
+                visible: root.viewingEvent && root.viewingEvent.id
+                onClicked: {
+                    if (root.viewingEvent && root.viewingEvent.id) {
+                        CalendarService.deleteLocalEvent(root.viewingEvent.id);
+                    }
+                    root.showViewDialog = false
+                }
+
+                StyledText {
+                    anchors.centerIn: parent
+                    text: "delete"
+                    font.family: Appearance.font.family.iconMaterial
+                    color: viewDialog.textColor
+                }
+            }
+
+            RippleButton {
+                id: editButton
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: 14
+                implicitWidth: 36
+                implicitHeight: 36
+                buttonRadius: Appearance.rounding.full
+                onClicked: {
+                    root.showViewDialog = false
+                    addEventDialog.openForEdit(root.viewingEvent, root.viewingDayDate)
+                }
+
+                StyledText {
+                    anchors.centerIn: parent
+                    text: "edit"
+                    font.family: Appearance.font.family.iconMaterial
+                    color: viewDialog.textColor
+                }
+            }
+
+            ColumnLayout {
+                id: viewDialogColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                spacing: 14
+
+                StyledText {
+                    Layout.topMargin: 64
+                    Layout.leftMargin: 24
+                    Layout.rightMargin: 24
+                    Layout.fillWidth: true
+                    color: viewDialog.textColor
+                    font.pixelSize: Appearance.font.pixelSize.huge
+                    font.weight: Font.Medium
+                    wrapMode: Text.WordWrap
+                    text: root.viewingEvent ? root.viewingEvent.title : ""
+                }
+
+                StyledText {
+                    Layout.leftMargin: 24
+                    Layout.rightMargin: 24
+                    Layout.fillWidth: true
+                    color: viewDialog.textColor
+                    font.pixelSize: Appearance.font.pixelSize.large
+                    text: viewDialog.formattedRange()
+                }
+
+                StyledText {
+                    Layout.leftMargin: 24
+                    Layout.rightMargin: 24
+                    Layout.bottomMargin: 32
+                    Layout.fillWidth: true
+                    color: viewDialog.textColor
+                    wrapMode: Text.WordWrap
+                    visible: root.viewingEvent && root.viewingEvent.description && root.viewingEvent.description.length > 0
+                    text: root.viewingEvent ? root.viewingEvent.description : ""
                 }
             }
         }

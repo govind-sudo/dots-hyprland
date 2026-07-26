@@ -37,6 +37,7 @@ Singleton {
     function addLocalEvent(title, desc, startDate, endDate, color) {
         let updated = root.localEvents.slice(0);
         updated.push({
+            "id": `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             "title": title,
             "description": desc,
             "start": root.isoLocal(startDate),
@@ -48,6 +49,25 @@ Singleton {
         root.persistLocalData();
     }
 
+    function updateLocalEvent(id, title, desc, startDate, endDate, color) {
+        root.localEvents = root.localEvents.map(function(ev) {
+            if (ev.id !== id) return ev;
+            return Object.assign({}, ev, {
+                "title": title,
+                "description": desc,
+                "start": root.isoLocal(startDate),
+                "end": root.isoLocal(endDate),
+                "color": color
+            });
+        });
+        root.persistLocalData();
+    }
+
+    function deleteLocalEvent(id) {
+        root.localEvents = root.localEvents.filter(function(ev) { return ev.id !== id; });
+        root.persistLocalData();
+    }
+
     function placeEventInDays(days, ev) {
         if (!ev.start) return;
         let evDate = new Date(ev.start);
@@ -56,11 +76,13 @@ Singleton {
                 evDate.getMonth() === day.date.getMonth() &&
                 evDate.getDate() === day.date.getDate()) {
                 if (ev.allDay) {
-                    day.events.push({ "title": ev.title, "start": "00:00", "end": "23:59", "color": ev.color });
+                    day.events.push({ "id": ev.id, "title": ev.title, "description": ev.description, "start": "00:00", "end": "23:59", "color": ev.color });
                 } else {
                     let endDate = ev.end ? new Date(ev.end) : evDate;
                     day.events.push({
+                        "id": ev.id,
                         "title": ev.title,
+                        "description": ev.description,
                         "start": `${root.pad(evDate.getHours())}:${root.pad(evDate.getMinutes())}`,
                         "end": `${root.pad(endDate.getHours())}:${root.pad(endDate.getMinutes())}`,
                         "color": ev.color
@@ -73,6 +95,7 @@ Singleton {
 
     // TEMP: while building the Timetable UI, skip the Python process entirely
     // and render sample data instead. Flip to false once gcal.py is wired up.
+    // property bool useMockData: true
 
     function pad(n) {
         return String(n).padStart(2, "0");
@@ -135,8 +158,20 @@ Singleton {
         onLoaded: {
             try {
                 const parsed = JSON.parse(localDataFileView.text());
-                root.localEvents = parsed.localEvents ?? [];
+                let needsMigration = false;
+                const events = (parsed.localEvents ?? []).map(function(ev) {
+                    if (ev.id) return ev;
+                    needsMigration = true;
+                    return Object.assign({}, ev, {
+                        "id": `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+                    });
+                });
+                root.localEvents = events;
                 root.customColorOptions = parsed.customColorOptions ?? [];
+                if (needsMigration) {
+                    console.log("[CalendarService] Backfilled missing ids on old events");
+                    root.persistLocalData();
+                }
                 console.log("[CalendarService] Local data loaded");
             } catch (e) {
                 console.warn(`[CalendarService] Failed to parse local data: ${e.message}`);
@@ -156,11 +191,6 @@ Singleton {
 
     Component.onCompleted: {
         localDataFileView.reload();
-        if (root.useMockData) {
-            root.generateMockWeek();
-        } else {
-            root.refresh();
-        }
     }
 
     Process {
