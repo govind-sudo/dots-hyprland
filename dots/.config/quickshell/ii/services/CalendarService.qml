@@ -73,7 +73,6 @@ Singleton {
 
     // TEMP: while building the Timetable UI, skip the Python process entirely
     // and render sample data instead. Flip to false once gcal.py is wired up.
-    property bool useMockData: true
 
     function pad(n) {
         return String(n).padStart(2, "0");
@@ -128,7 +127,7 @@ Singleton {
     }
 
     onRawEventsChanged: root.rebuildWeek()
-    onLocalEventsChanged: root.useMockData ? root.generateMockWeek() : root.rebuildWeek()
+    onLocalEventsChanged: root.rebuildWeek()
 
     FileView {
         id: localDataFileView
@@ -164,34 +163,6 @@ Singleton {
         }
     }
 
-    function generateMockWeek() {
-        const start = root.startOfWeek();
-        let days = [];
-        for (let i = 0; i < root.daysShown; i++) {
-            let d = new Date(start);
-            d.setDate(d.getDate() + i);
-            days.push({ "name": root.dayName(d), "date": d, "events": [] });
-        }
-
-        // A handful of sample events spread across the week, including
-        // an all-day one and a couple overlapping in time, to stress-test layout.
-        // Colors match Google Calendar's built-in event color palette,
-        // so this looks identical once real data replaces it.
-        days[0].events.push({ "title": "Team Standup", "start": "09:00", "end": "09:30", "color": "#039be5" });      // Peacock
-        days[0].events.push({ "title": "Deep Work: Refactor", "start": "10:00", "end": "12:30", "color": "#616161" }); // Graphite
-        days[1].events.push({ "title": "1:1 with Manager", "start": "14:00", "end": "14:30", "color": "#8e24aa" });  // Grape
-        days[2].events.push({ "title": "Design Review", "start": "11:00", "end": "12:00", "color": "#3f51b5" });     // Blueberry
-        days[3].events.push({ "title": "Gym", "start": "07:00", "end": "08:00", "color": "#33b679" });               // Sage
-        days[3].events.push({ "title": "Client Call", "start": "16:00", "end": "17:00", "color": "#d50000" });       // Tomato
-        days[4].events.push({ "title": "Sprint Planning", "start": "10:00", "end": "11:30", "color": "#f6bf26" });   // Banana
-        days[4].events.push({ "title": "Dentist Appointment", "start": "13:00", "end": "14:00", "color": "#e67c73" }); // Flamingo
-        days[5].events.push({ "title": "Hackathon Prep", "start": "12:00", "end": "18:00", "color": "#f4511e" });    // Tangerine
-        // days[6] (last day of week) deliberately left empty — good for testing empty-day rendering
-
-        for (const ev of root.localEvents) root.placeEventInDays(days, ev);
-        root.eventsInWeek = days;
-    }
-
     Process {
         id: fetcher
         stdout: StdioCollector {
@@ -218,7 +189,7 @@ Singleton {
     }
 
     Timer {
-        running: true
+        running: false
         repeat: true
         interval: root.fetchIntervalMs
         triggeredOnStart: false
