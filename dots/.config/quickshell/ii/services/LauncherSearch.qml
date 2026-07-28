@@ -224,6 +224,102 @@ Singleton {
                     }
                 });
             }).filter(Boolean);
+        }else if (root.query === Config.options.search.prefix.app) {
+            const output = [];
+
+            // Recent apps, shown above the alphabetical list
+            const recentApps = RecentApps.topEntries(5);
+            if (recentApps.length > 0) {
+                output.push(resultComp.createObject(null, {
+                    name: Translation.tr("Recent"),
+                    isSeparator: true
+                }));
+                for (const entry of recentApps) {
+                    output.push(resultComp.createObject(null, {
+                        type: Translation.tr("Recent"),
+                        id: entry.id,
+                        name: entry.name,
+                        iconName: entry.icon,
+                        iconType: LauncherSearchResult.IconType.System,
+                        verb: Translation.tr("Open"),
+                        execute: () => {
+                            RecentApps.recordUsage(entry.id);
+                            if (!entry.runInTerminal)
+                                entry.execute();
+                            else {
+                                Quickshell.execDetached(["bash", '-c', `${Config.options.apps.terminal} -e '${StringUtils.shellSingleQuoteEscape(entry.command.join(' '))}'`]);
+                            }
+                        },
+                        comment: entry.comment,
+                        runInTerminal: entry.runInTerminal,
+                        genericName: entry.genericName,
+                        keywords: entry.keywords,
+                        actions: entry.actions.map(action => {
+                            return resultComp.createObject(null, {
+                                name: action.name,
+                                iconName: action.icon,
+                                iconType: LauncherSearchResult.IconType.System,
+                                execute: () => {
+                                    if (!action.runInTerminal)
+                                        action.execute();
+                                    else {
+                                        Quickshell.execDetached(["bash", '-c', `${Config.options.apps.terminal} -e '${StringUtils.shellSingleQuoteEscape(action.command.join(' '))}'`]);
+                                    }
+                                }
+                            });
+                        })
+                    }));
+                }
+            }
+
+            // Alphabetical list with letter separators
+            const sortedApps = AppSearch.listAllSorted();
+            let lastLetter = "";
+            for (const entry of sortedApps) {
+                const firstLetter = (entry.name?.[0] ?? "").toUpperCase();
+                if (firstLetter !== lastLetter) {
+                    output.push(resultComp.createObject(null, {
+                        name: firstLetter,
+                        isSeparator: true
+                    }));
+                    lastLetter = firstLetter;
+                }
+                output.push(resultComp.createObject(null, {
+                    type: Translation.tr("App"),
+                    id: entry.id,
+                    name: entry.name,
+                    iconName: entry.icon,
+                    iconType: LauncherSearchResult.IconType.System,
+                    verb: Translation.tr("Open"),
+                    execute: () => {
+                        RecentApps.recordUsage(entry.id);
+                        if (!entry.runInTerminal)
+                            entry.execute();
+                        else {
+                            Quickshell.execDetached(["bash", '-c', `${Config.options.apps.terminal} -e '${StringUtils.shellSingleQuoteEscape(entry.command.join(' '))}'`]);
+                        }
+                    },
+                    comment: entry.comment,
+                    runInTerminal: entry.runInTerminal,
+                    genericName: entry.genericName,
+                    keywords: entry.keywords,
+                    actions: entry.actions.map(action => {
+                        return resultComp.createObject(null, {
+                            name: action.name,
+                            iconName: action.icon,
+                            iconType: LauncherSearchResult.IconType.System,
+                            execute: () => {
+                                if (!action.runInTerminal)
+                                    action.execute();
+                                else {
+                                    Quickshell.execDetached(["bash", '-c', `${Config.options.apps.terminal} -e '${StringUtils.shellSingleQuoteEscape(action.command.join(' '))}'`]);
+                                }
+                            }
+                        });
+                    })
+                }));
+            }
+            return output;
         }
 
         ////////////////// Init ///////////////////
@@ -248,10 +344,10 @@ Singleton {
                 iconType: LauncherSearchResult.IconType.System,
                 verb: Translation.tr("Open"),
                 execute: () => {
+                    RecentApps.recordUsage(entry.id);
                     if (!entry.runInTerminal)
                         entry.execute();
                     else {
-                        // Probably needs more proper escaping, but this will do for now
                         Quickshell.execDetached(["bash", '-c', `${Config.options.apps.terminal} -e '${StringUtils.shellSingleQuoteEscape(entry.command.join(' '))}'`]);
                     }
                 },
@@ -288,7 +384,12 @@ Singleton {
                 if (cleanedCommand.startsWith(Config.options.search.prefix.shellCommand)) {
                     cleanedCommand = cleanedCommand.slice(Config.options.search.prefix.shellCommand.length);
                 }
-                Quickshell.execDetached(["bash", "-c", root.query.startsWith('sudo') ? `${Config.options.apps.terminal} fish -C '${cleanedCommand}'` : cleanedCommand]);
+                //if you fish
+                // const heldCommand = `${cleanedCommand}; exec fish`;
+                // Quickshell.execDetached(["fish", "-c", `${Config.options.apps.terminal} -e fish -c '${StringUtils.shellSingleQuoteEscape(heldCommand)}'`]);
+                //default bash
+                const heldCommand = `${cleanedCommand}; exec bash`;
+                Quickshell.execDetached(["bash", "-c", `${Config.options.apps.terminal} -e bash -c '${StringUtils.shellSingleQuoteEscape(heldCommand)}'`]);
             }
         });
         const webSearchResultObject = resultComp.createObject(null, {
