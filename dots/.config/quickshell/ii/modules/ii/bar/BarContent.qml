@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Services.UPower
 import qs
+import Quickshell.Io
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -13,6 +14,7 @@ Item { // Bar content region
     id: root
 
     property var screen: root.QsWindow.window?.screen
+    property bool warpConnected: false // Property for tracking the vpn toggling
     property var brightnessMonitor: Brightness.getMonitorForScreen(screen)
     property real useShortenedForm: (Appearance.sizes.barHellaShortenScreenWidthThreshold >= screen?.width) ? 2 : (Appearance.sizes.barShortenScreenWidthThreshold >= screen?.width) ? 1 : 0
     readonly property int centerSideModuleWidth: (useShortenedForm == 2) ? Appearance.sizes.barCenterSideModuleWidthHellaShortened : (useShortenedForm == 1) ? Appearance.sizes.barCenterSideModuleWidthShortened : Appearance.sizes.barCenterSideModuleWidth
@@ -300,6 +302,47 @@ Item { // Bar content region
                         }
                         NotificationUnreadCount {
                             id: notificationUnreadCount
+                        }
+                    }
+                    // Keep System Awake
+                    Revealer {
+                        reveal: Idle.inhibit
+                        Layout.fillHeight: true
+                        Layout.rightMargin: reveal ? indicatorsRowLayout.realSpacing : 0
+                        Behavior on Layout.rightMargin {
+                            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                        }
+                        MaterialSymbol {
+                            text: "coffee"
+                            iconSize: Appearance.font.pixelSize.larger
+                            color: rightSidebarButton.colText
+                        }
+                    }
+                    //Cloudflare WARP
+                    Timer {
+                        interval: 5000 // waits for 5 sec after toggle on/off of Clodflare to show and hide the icon
+                        repeat: true
+                        triggeredOnStart: true
+                        running: true
+                        onTriggered: warpCheckProcess.running = true
+                    }
+
+                    Process {
+                        id: warpCheckProcess
+                        command: ["bash", "-c", "warp-cli status 2>/dev/null | grep -q Connected"]
+                        onExited: (exitCode) => root.warpConnected = exitCode === 0
+                    }
+                    Revealer {
+                        reveal: root.warpConnected
+                        Layout.fillHeight: true
+                        Layout.rightMargin: reveal ? indicatorsRowLayout.realSpacing : 0
+                        Behavior on Layout.rightMargin {
+                            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                        }
+                        MaterialSymbol {
+                            text: "cloud_lock"
+                            iconSize: Appearance.font.pixelSize.larger
+                            color: rightSidebarButton.colText
                         }
                     }
                     MaterialSymbol {
