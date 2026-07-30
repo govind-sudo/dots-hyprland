@@ -30,7 +30,15 @@ ContentPage {
                 })
             }
         }
-
+        ConfigSwitch {
+            buttonIcon: "calendar_month"
+            text: Translation.tr("Show Timetable tab")
+            checked: Config.options.cheatsheet.showTimetable
+            onCheckedChanged: {
+                Config.options.cheatsheet.showTimetable = checked;
+            }
+        }
+        
         ConfigSwitch {
             buttonIcon: "󰘵"
             text: Translation.tr("Use macOS-like symbols for mods keys")

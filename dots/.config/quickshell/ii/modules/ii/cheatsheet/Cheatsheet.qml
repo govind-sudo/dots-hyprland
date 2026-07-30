@@ -22,11 +22,10 @@ Scope { // Scope
             "icon": "experiment",
             "name": Translation.tr("Elements")
         },
-        {
+    ].concat(Config.options.cheatsheet.showTimetable ? [{
             "icon": "calendar_month",
             "name": Translation.tr("Timetable")
-        },
-    ]
+        }] : [])
 
     Loader {
         id: cheatsheetLoader
@@ -50,7 +49,7 @@ Scope { // Scope
             implicitWidth: cheatsheetBackground.width + Appearance.sizes.elevationMargin * 2
             implicitHeight: cheatsheetBackground.height + Appearance.sizes.elevationMargin * 2
             WlrLayershell.namespace: "quickshell:cheatsheet"
-            WlrLayershell.keyboardFocus: cheatsheetTimetableTab.showAddDialog ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: (cheatsheetTimetableLoader.item?.showAddDialog ?? false) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
             color: "transparent"
 
             mask: Region {
@@ -175,8 +174,10 @@ Scope { // Scope
 
                         CheatsheetKeybinds {}
                         CheatsheetPeriodicTable {}
-                        CheatsheetTimetable {
-                            id: cheatsheetTimetableTab
+                        Loader {
+                            id: cheatsheetTimetableLoader
+                            active: Config.options.cheatsheet.showTimetable
+                            sourceComponent: CheatsheetTimetable {}
                         }
                     }
                 }
